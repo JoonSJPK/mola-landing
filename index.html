@@ -307,6 +307,41 @@
       0%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
       50%       { opacity: 0.6; transform: translate(-50%, -50%) scale(1.12); }
     }
+    /* ── Mobile ── */
+    @media (max-width: 600px) {
+      .status-chip { left: 16px; top: 14px; }
+      .version-chip { right: 16px; top: 14px; }
+      .corner-tl { top: 10px; left: 10px; }
+      .corner-tr { top: 10px; right: 10px; }
+      .corner-bl { bottom: 10px; left: 10px; }
+      .corner-br { bottom: 10px; right: 10px; }
+
+      .pre-title { font-size: 8px; letter-spacing: 0.2em; margin-bottom: 20px; }
+
+      .heading { letter-spacing: 0.25em; margin-bottom: 14px; }
+
+      .subtitle {
+        font-size: 9px;
+        letter-spacing: 0.14em;
+        margin-bottom: 28px;
+        padding: 0 24px;
+        text-align: center;
+      }
+
+      .body-copy {
+        font-size: 10px;
+        padding: 0 28px;
+        margin-bottom: 40px;
+        letter-spacing: 0.04em;
+      }
+      /* hide the <br> on small screens so text reflows naturally */
+      .body-copy br { display: none; }
+
+      .waitlist-btn { padding: 14px 32px; font-size: 10px; letter-spacing: 0.22em; }
+
+      .bottom-meta { gap: 14px; padding: 0 16px; white-space: nowrap; }
+    }
+
     /* ── Selection ── */
     ::selection {
       background: rgba(0,242,255,0.15);
