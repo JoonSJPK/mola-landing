@@ -228,6 +228,41 @@
       color: rgba(0,242,255,0.45);
     }
 
+    /* ── Email input ── */
+    .email-input {
+      clip-path: var(--clip);
+      background: var(--cyan-ghost);
+      border: 1px solid var(--cyan-border);
+      padding: 14px 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      color: var(--cyan);
+      outline: none;
+      width: 280px;
+      margin-bottom: 14px;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      opacity: 0;
+      animation: slide-up 0.7s ease forwards 0.85s;
+    }
+    .email-input::placeholder { color: rgba(0,242,255,0.2); }
+    .email-input:focus {
+      border-color: rgba(0,242,255,0.4);
+      box-shadow: 0 0 12px rgba(0,242,255,0.08);
+    }
+
+    /* ── Status message ── */
+    .form-msg {
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-top: 14px;
+      height: 16px;
+      transition: opacity 0.2s ease;
+    }
+    .form-msg.success { color: var(--cyan); }
+    .form-msg.error   { color: #ff4466; }
+
     /* ── Button ── */
     .waitlist-btn {
       position: relative;
@@ -338,6 +373,7 @@
       /* hide the <br> on small screens so text reflows naturally */
       .body-copy br { display: none; }
 
+      .email-input { width: calc(100% - 56px); font-size: 10px; }
       .waitlist-btn { padding: 14px 32px; font-size: 10px; letter-spacing: 0.22em; }
 
       .bottom-meta { gap: 14px; padding: 0 16px; white-space: nowrap; }
@@ -397,9 +433,11 @@
       See every node, every step, every failure — as it happens.
     </p>
 
+    <input class="email-input" id="email" type="email" placeholder="your@email.com" />
     <button class="waitlist-btn" onclick="handleWaitlist()">
       Join Waitlist
     </button>
+    <div class="form-msg" id="form-msg"></div>
   </div>
 
   <!-- Bottom meta -->
@@ -412,11 +450,57 @@
   </div>
 
   <script>
-    function handleWaitlist() {
-      console.log('[MOLA] Waitlist join requested');
-      // TODO: wire up to waitlist backend
-      alert('You\'re on the list. We\'ll be in touch.');
+    const SUPABASE_URL = 'https://xucikpuvpcwrswweutom.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_jYEBpLQ573O3m7qk7gGAfg_fPuPulE8';
+
+    async function handleWaitlist() {
+      const emailEl = document.getElementById('email');
+      const msgEl   = document.getElementById('form-msg');
+      const btn     = document.querySelector('.waitlist-btn');
+      const email   = emailEl.value.trim();
+
+      msgEl.className = 'form-msg';
+      msgEl.textContent = '';
+
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        msgEl.className = 'form-msg error';
+        msgEl.textContent = 'Enter a valid email address';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Submitting...';
+
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/waitlist`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      btn.disabled = false;
+      btn.textContent = 'Join Waitlist';
+
+      if (res.ok) {
+        emailEl.value = '';
+        msgEl.className = 'form-msg success';
+        msgEl.textContent = "You're on the list.";
+      } else if (res.status === 409) {
+        msgEl.className = 'form-msg error';
+        msgEl.textContent = 'Already registered.';
+      } else {
+        msgEl.className = 'form-msg error';
+        msgEl.textContent = 'Something went wrong. Try again.';
+      }
     }
+
+    document.getElementById('email').addEventListener('keydown', e => {
+      if (e.key === 'Enter') handleWaitlist();
+    });
   </script>
 </body>
 </html>
