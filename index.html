@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>M.O.L.A. — Monitor & Observe Live Application Traces</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #00020c;
+      --cyan: #00f2ff;
+      --cyan-dim: rgba(0,242,255,0.5);
+      --cyan-faint: rgba(0,242,255,0.12);
+      --cyan-ghost: rgba(0,242,255,0.06);
+      --cyan-border: rgba(0,242,255,0.15);
+      --cyan-border-bright: rgba(0,242,255,0.4);
+      --clip: polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--cyan);
+      font-family: 'JetBrains Mono', monospace;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Scanline overlay ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,242,255,0.012) 2px,
+        rgba(0,242,255,0.012) 4px
+      );
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    /* ── Grid background ── */
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,242,255,0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,242,255,0.035) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, black 30%, transparent 100%);
+      pointer-events: none;
+    }
+
+    /* ── Radial glow behind content ── */
+    .glow-orb {
+      position: fixed;
+      width: 600px;
+      height: 600px;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(ellipse, rgba(0,242,255,0.06) 0%, transparent 70%);
+      pointer-events: none;
+      animation: orb-pulse 4s ease-in-out infinite;
+    }
+
+    /* ── Top accent bar ── */
+    .top-bar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--cyan), rgba(0,242,255,0.2), transparent);
+      opacity: 0;
+      animation: fade-in 0.6s ease forwards 0.2s;
+    }
+
+    /* ── Corner ticks ── */
+    .corner {
+      position: fixed;
+      width: 16px;
+      height: 16px;
+      opacity: 0;
+      animation: fade-in 0.6s ease forwards 0.4s;
+    }
+    .corner-tl { top: 16px; left: 16px; }
+    .corner-tr { top: 16px; right: 16px; transform: scaleX(-1); }
+    .corner-bl { bottom: 16px; left: 16px; transform: scaleY(-1); }
+    .corner-br { bottom: 16px; right: 16px; transform: scale(-1,-1); }
+
+    /* ── Status chip (top-left) ── */
+    .status-chip {
+      position: fixed;
+      top: 20px;
+      left: 40px;
+      clip-path: var(--clip);
+      background: var(--cyan-ghost);
+      border: 1px solid var(--cyan-border);
+      padding: 5px 12px;
+      opacity: 0;
+      animation: fade-in 0.6s ease forwards 0.8s;
+    }
+    .status-label {
+      font-size: 9px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--cyan-dim);
+    }
+
+    /* ── Version chip (top-right) ── */
+    .version-chip {
+      position: fixed;
+      top: 20px;
+      right: 40px;
+      clip-path: var(--clip);
+      background: var(--cyan-ghost);
+      border: 1px solid var(--cyan-border);
+      padding: 5px 12px;
+      font-size: 9px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(0,242,255,0.25);
+      opacity: 0;
+      animation: fade-in 0.6s ease forwards 0.8s;
+    }
+
+    /* ── Main layout ── */
+    .stage {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      position: relative;
+    }
+
+    /* ── Decorative horizontal rule ── */
+    .h-rule {
+      width: 260px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan-border), transparent);
+      opacity: 0;
+      animation: fade-in 0.6s ease forwards 0.7s;
+    }
+
+    /* ── Pre-title label ── */
+    .pre-title {
+      font-size: 9px;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: rgba(0,242,255,0.2);
+      margin-bottom: 28px;
+      opacity: 0;
+      animation: slide-up 0.7s ease forwards 0.5s;
+    }
+
+    /* ── Heading ── */
+    .heading {
+      font-size: clamp(52px, 10vw, 96px);
+      font-weight: 700;
+      letter-spacing: 0.45em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      text-shadow:
+        0 0 40px rgba(0,242,255,0.7),
+        0 0 80px rgba(0,242,255,0.3),
+        0 0 120px rgba(0,242,255,0.15);
+      animation: slide-up 0.8s ease forwards 0.3s, breathe 3.5s ease-in-out infinite 1.5s;
+      opacity: 0;
+      margin-bottom: 18px;
+    }
+
+    /* ── Subtitle ── */
+    .subtitle {
+      font-size: 11px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: rgba(0,242,255,0.35);
+      margin-bottom: 36px;
+      opacity: 0;
+      animation: slide-up 0.7s ease forwards 0.55s;
+    }
+
+    /* ── Divider ── */
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 28px;
+      opacity: 0;
+      animation: fade-in 0.6s ease forwards 0.75s;
+    }
+    .divider-line {
+      width: 48px; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan-border));
+    }
+    .divider-line.right {
+      background: linear-gradient(90deg, var(--cyan-border), transparent);
+    }
+    .divider-mark {
+      font-size: 8px;
+      color: rgba(0,242,255,0.18);
+      letter-spacing: 0.1em;
+    }
+
+    /* ── Body copy ── */
+    .body-copy {
+      font-size: 11px;
+      font-weight: 300;
+      letter-spacing: 0.08em;
+      color: rgba(0,242,255,0.28);
+      line-height: 1.9;
+      text-align: center;
+      max-width: 480px;
+      margin-bottom: 52px;
+      opacity: 0;
+      animation: slide-up 0.7s ease forwards 0.7s;
+    }
+    .body-copy span {
+      color: rgba(0,242,255,0.45);
+    }
+
+    /* ── Button ── */
+    .waitlist-btn {
+      position: relative;
+      clip-path: var(--clip);
+      background: transparent;
+      border: 1px solid var(--cyan-border-bright);
+      padding: 16px 44px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      cursor: pointer;
+      transition: background 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+      opacity: 0;
+      animation: slide-up 0.7s ease forwards 0.9s;
+    }
+    .waitlist-btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(0,242,255,0.07) 0%, transparent 60%);
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+    .waitlist-btn:hover::before { opacity: 1; }
+    .waitlist-btn:hover {
+      background: rgba(0,242,255,0.04);
+      border-color: var(--cyan);
+      box-shadow:
+        0 0 18px rgba(0,242,255,0.2),
+        inset 0 0 18px rgba(0,242,255,0.04);
+      color: #fff;
+      text-shadow: 0 0 10px var(--cyan);
+    }
+    .waitlist-btn:active {
+      box-shadow: 0 0 8px rgba(0,242,255,0.15);
+    }
+
+    /* ── Bottom meta ── */
+    .bottom-meta {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      opacity: 0;
+      animation: fade-in 0.6s ease forwards 1.2s;
+    }
+    .meta-item {
+      font-size: 8px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(0,242,255,0.12);
+    }
+    .meta-sep {
+      width: 1px; height: 10px;
+      background: rgba(0,242,255,0.1);
+    }
+
+    /* ── Keyframes ── */
+    @keyframes fade-in {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes slide-up {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes breathe {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.72; }
+    }
+    @keyframes orb-pulse {
+      0%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      50%       { opacity: 0.6; transform: translate(-50%, -50%) scale(1.12); }
+    }
+    /* ── Selection ── */
+    ::selection {
+      background: rgba(0,242,255,0.15);
+      color: var(--cyan);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="grid-bg"></div>
+  <div class="glow-orb"></div>
+  <div class="top-bar"></div>
+
+  <!-- Corner ticks -->
+  <svg class="corner corner-tl" viewBox="0 0 16 16" fill="none">
+    <path d="M0 16 L0 0 L16 0" stroke="#00f2ff" stroke-width="1.2" />
+  </svg>
+  <svg class="corner corner-tr" viewBox="0 0 16 16" fill="none">
+    <path d="M0 16 L0 0 L16 0" stroke="#00f2ff" stroke-width="1.2" />
+  </svg>
+  <svg class="corner corner-bl" viewBox="0 0 16 16" fill="none">
+    <path d="M0 16 L0 0 L16 0" stroke="#00f2ff" stroke-width="1.2" />
+  </svg>
+  <svg class="corner corner-br" viewBox="0 0 16 16" fill="none">
+    <path d="M0 16 L0 0 L16 0" stroke="#00f2ff" stroke-width="1.2" />
+  </svg>
+
+  <!-- Status chip -->
+  <div class="status-chip">
+    <span class="status-label">Coming Soon</span>
+  </div>
+
+  <!-- Version chip -->
+  <div class="version-chip">v0.1.0-alpha</div>
+
+  <!-- Main content -->
+  <div class="stage">
+    <p class="pre-title">// Instrumentation Layer</p>
+
+    <h1 class="heading">M.O.L.A.</h1>
+
+    <p class="subtitle">Monitor &amp; Observe Live Application Traces</p>
+
+    <div class="divider">
+      <div class="divider-line"></div>
+      <span class="divider-mark">◆</span>
+      <div class="divider-line right"></div>
+    </div>
+
+    <p class="body-copy">
+      Real-time trace visualization for <span>instrumented applications</span>.<br />
+      See every node, every step, every failure — as it happens.
+    </p>
+
+    <button class="waitlist-btn" onclick="handleWaitlist()">
+      Join Waitlist
+    </button>
+  </div>
+
+  <!-- Bottom meta -->
+  <div class="bottom-meta">
+    <span class="meta-item">Mola Tracer</span>
+    <div class="meta-sep"></div>
+    <span class="meta-item">Real-time Observability</span>
+    <div class="meta-sep"></div>
+    <span class="meta-item">2026</span>
+  </div>
+
+  <script>
+    function handleWaitlist() {
+      console.log('[MOLA] Waitlist join requested');
+      // TODO: wire up to waitlist backend
+      alert('You\'re on the list. We\'ll be in touch.');
+    }
+  </script>
+</body>
+</html>
